@@ -1,33 +1,127 @@
+import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
-import Link from 'next/link'
-import { Lightbulb, GitBranch, BarChart2 } from 'lucide-react'
+import { MetricCard } from '@/components/dashboard/metric-card'
+import { PipelineDistribution } from '@/components/dashboard/pipeline-distribution'
+import { TopIdeas } from '@/components/dashboard/top-ideas'
+import { ContainerStatus } from '@/components/dashboard/container-status'
+import { AlertsList } from '@/components/dashboard/alerts-list'
+import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { RecommendationsList } from '@/components/dashboard/recommendations-list'
+import { DashboardRefresh } from '@/components/dashboard/dashboard-refresh'
+import { generateAlerts } from '@/lib/alerts'
+import { generateRecommendations } from '@/lib/recommendations'
+import { checkGate } from '@/lib/pipeline-rules'
+import { Lightbulb, TrendingUp, AlertTriangle } from 'lucide-react'
+import type { Idea, ContainerAnalysis, PipelineEvent, PipelineStage } from '@/types'
 
-export default function DashboardPage() {
+export const dynamic = 'force-dynamic'
+
+const STAGES: PipelineStage[] = [
+  'epiphany', 'triage', 'validation', 'mvp',
+  'launch', 'retention', 'monetization', 'scale',
+]
+
+export default async function DashboardPage() {
+  const supabase = await createClient()
+
+  const [
+    { data: ideas },
+    { data: containers },
+    { data: events },
+  ] = await Promise.all([
+    supabase.from('ideas').select('*').eq('status', 'active').order('score', { ascending: false }),
+    supabase.from('container_analyses').select('*'),
+    supabase.from('pipeline_events').select('*').order('created_at', { ascending: false }).limit(10),
+  ])
+
+  const activeIdeas = (ideas ?? []) as Idea[]
+  const allContainers = (containers ?? []) as ContainerAnalysis[]
+  const recentEvents = (events ?? []) as PipelineEvent[]
+
+  // Metrics
+  const avgScore = activeIdeas.length > 0
+    ? Math.round(activeIdeas.reduce((s, i) => s + i.score, 0) / activeIdeas.length)
+    : 0
+
+  const containersByIdea = new Map<string, ContainerAnalysis[]>()
+  for (const c of allContainers) {
+    const list = containersByIdea.get(c.idea_id) ?? []
+    list.push(c)
+    containersByIdea.set(c.idea_id, list)
+  }
+
+  let blockedCount = 0
+  for (const idea of activeIdeas) {
+    const stageIdx = STAGES.indexOf(idea.pipeline_stage)
+    if (stageIdx < STAGES.length - 1) {
+      const nextStage = STAGES[stageIdx + 1]
+      const ideaContainers = Object.fromEntries(
+        (containersByIdea.get(idea.id) ?? []).map(c => [c.container_type, c])
+      )
+      const { canAdvance } = checkGate(idea, ideaContainers, nextStage)
+      if (!canAdvance) blockedCount++
+    }
+  }
+
+  const countByStage: Record<string, number> = {}
+  for (const idea of activeIdeas) {
+    countByStage[idea.pipeline_stage] = (countByStage[idea.pipeline_stage] ?? 0) + 1
+  }
+
+  const alerts = generateAlerts({ ideas: activeIdeas, events: recentEvents, containers: allContainers })
+  const recommendations = generateRecommendations({ ideas: activeIdeas, containers: allContainers, events: recentEvents })
+
   return (
     <div className="flex flex-col h-full">
-      <Header title="Dashboard" breadcrumb="B2C OS" />
-      <div className="flex-1 p-6">
-        <div className="max-w-2xl mx-auto mt-16 text-center">
-          <div className="w-12 h-12 rounded-xl bg-[#6366F1]/10 flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">⚡</span>
-          </div>
-          <h2 className="text-xl font-semibold text-[#FAFAFA] mb-2">Dashboard em construção</h2>
-          <p className="text-[13px] text-[#52525B] mb-8">O painel principal está sendo desenvolvido na Fase 2. Por enquanto, acesse o Banco de Ideias.</p>
-          <div className="grid grid-cols-3 gap-3">
-            <Link href="/ideas" className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[#111113] border border-[#27272A] hover:border-[#3F3F46] transition-colors">
-              <Lightbulb className="w-5 h-5 text-[#6366F1]" />
-              <span className="text-[13px] font-medium text-[#A1A1AA]">Ideias</span>
-            </Link>
-            <Link href="/pipeline" className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[#111113] border border-[#27272A] hover:border-[#3F3F46] transition-colors">
-              <GitBranch className="w-5 h-5 text-[#10B981]" />
-              <span className="text-[13px] font-medium text-[#A1A1AA]">Pipeline</span>
-            </Link>
-            <Link href="/metrics" className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[#111113] border border-[#27272A] hover:border-[#3F3F46] transition-colors">
-              <BarChart2 className="w-5 h-5 text-[#F59E0B]" />
-              <span className="text-[13px] font-medium text-[#A1A1AA]">Métricas</span>
-            </Link>
-          </div>
+      <Header
+        title="Dashboard"
+        breadcrumb="B2C OS"
+        actions={<DashboardRefresh />}
+      />
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+
+        {/* Widget 1: Top metrics row */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <MetricCard
+            label="Ideias Ativas"
+            value={activeIdeas.length}
+            icon={Lightbulb}
+            color="#6366F1"
+          />
+          <MetricCard
+            label="Score Médio"
+            value={avgScore}
+            icon={TrendingUp}
+            color="#22C55E"
+          />
+          <MetricCard
+            label="Gate Bloqueado"
+            value={blockedCount}
+            icon={AlertTriangle}
+            color="#EF4444"
+            alert={blockedCount > 0}
+          />
         </div>
+
+        {/* Widget 4: Container status — full width */}
+        <ContainerStatus containers={allContainers} totalIdeas={activeIdeas.length} />
+
+        {/* Widgets 2 + 3: Distribution + Top ideas side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <PipelineDistribution countByStage={countByStage} />
+          <TopIdeas ideas={activeIdeas} />
+        </div>
+
+        {/* Widgets 5 + 7: Alerts + Recommendations side by side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <AlertsList alerts={alerts} />
+          <RecommendationsList recommendations={recommendations} />
+        </div>
+
+        {/* Widget 6: Recent activity — full width */}
+        <ActivityFeed events={recentEvents} ideas={activeIdeas} />
+
       </div>
     </div>
   )
