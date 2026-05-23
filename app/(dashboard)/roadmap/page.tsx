@@ -1,16 +1,23 @@
 import { Header } from '@/components/layout/header'
+import { RoadmapClient } from '@/components/roadmap/roadmap-client'
+import { createClient } from '@/lib/supabase/server'
+import type { RoadmapItem, Idea } from '@/types'
 
-export default function RoadmapPage() {
+export default async function RoadmapPage() {
+  const supabase = await createClient()
+
+  const [{ data: items }, { data: ideas }] = await Promise.all([
+    supabase.from('roadmap_items').select('*').order('order_index'),
+    supabase.from('ideas').select('id, name').eq('status', 'active').order('name'),
+  ])
+
   return (
     <div className="flex flex-col h-full">
       <Header title="Roadmap" breadcrumb="B2C OS" />
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-3xl mb-3">🚧</p>
-          <h2 className="text-[15px] font-semibold text-[#FAFAFA] mb-1">Roadmap Visual</h2>
-          <p className="text-[13px] text-[#52525B]">Disponível na Fase 3</p>
-        </div>
-      </div>
+      <RoadmapClient
+        initialItems={(items ?? []) as RoadmapItem[]}
+        ideas={(ideas ?? []) as Idea[]}
+      />
     </div>
   )
 }

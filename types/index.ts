@@ -126,3 +126,112 @@ export const CONTAINER_CONFIGS: ContainerConfig[] = [
   { type: 'scale', label: 'Escala', icon: '🚀', color: '#EC4899', description: 'Crescimento sem dependência linear' },
   { type: 'behavior', label: 'Comportamento', icon: '🧠', color: '#EF4444', description: 'Alinhamento psicológico real' },
 ]
+
+// ============================================================
+// METRICS
+// ============================================================
+export interface MetricEntry {
+  id: string
+  idea_id: string | null
+  product_name: string | null
+  date: string
+  d1_retention: number | null
+  d7_retention: number | null
+  d30_retention: number | null
+  churn_rate: number | null
+  mrr: number | null
+  cac: number | null
+  ctr: number | null
+  new_users: number | null
+  active_users: number | null
+  custom_metrics: Record<string, unknown>
+  notes: string | null
+  created_at: string
+}
+
+// ============================================================
+// PROBLEMS
+// ============================================================
+export type ProblemFrequency = 'daily' | 'weekly' | 'monthly' | 'rarely'
+export type ProblemSource = 'observation' | 'interview' | 'personal' | 'research' | 'social'
+
+export interface Problem {
+  id: string
+  title: string
+  description: string | null
+  frequency: ProblemFrequency | null
+  emotional_intensity: number | null
+  source: ProblemSource | null
+  real_quote: string | null
+  behavior_pattern: string | null
+  tags: string[]
+  related_idea_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
+export const PROBLEM_FREQUENCY_LABELS: Record<ProblemFrequency, string> = {
+  daily: 'Diária',
+  weekly: 'Semanal',
+  monthly: 'Mensal',
+  rarely: 'Raramente',
+}
+
+export const PROBLEM_SOURCE_LABELS: Record<ProblemSource, string> = {
+  observation: 'Observação',
+  interview: 'Entrevista',
+  personal: 'Pessoal',
+  research: 'Pesquisa',
+  social: 'Rede Social',
+}
+
+// ============================================================
+// ROADMAP
+// ============================================================
+export type PlanType = 'A' | 'B'
+export type RoadmapTimeframe = 'short' | 'medium' | 'long'
+export type RoadmapStatus = 'todo' | 'in_progress' | 'done' | 'blocked'
+export type RoadmapPriority = 'low' | 'medium' | 'high' | 'critical'
+
+export interface RoadmapItem {
+  id: string
+  title: string
+  description: string | null
+  plan_type: PlanType
+  timeframe: RoadmapTimeframe
+  status: RoadmapStatus
+  priority: RoadmapPriority
+  is_milestone: boolean
+  idea_id: string | null
+  due_date: string | null
+  order_index: number
+  created_at: string
+  updated_at: string
+}
+
+export const ROADMAP_STATUS_LABELS: Record<RoadmapStatus, string> = {
+  todo: 'A fazer',
+  in_progress: 'Em andamento',
+  done: 'Concluído',
+  blocked: 'Bloqueado',
+}
+
+export const ROADMAP_STATUS_COLORS: Record<RoadmapStatus, string> = {
+  todo: '#52525B',
+  in_progress: '#3B82F6',
+  done: '#22C55E',
+  blocked: '#EF4444',
+}
+
+export const ROADMAP_PRIORITY_COLORS: Record<RoadmapPriority, string> = {
+  critical: '#EF4444',
+  high: '#F97316',
+  medium: '#3B82F6',
+  low: '#52525B',
+}
+
+export const ROADMAP_TIMEFRAME_LABELS: Record<RoadmapTimeframe, string> = {
+  short: 'Curto Prazo',
+  medium: 'Médio Prazo',
+  long: 'Longo Prazo',
+}
