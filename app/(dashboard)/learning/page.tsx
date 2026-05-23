@@ -1,16 +1,23 @@
 import { Header } from '@/components/layout/header'
+import { LearningClient } from '@/components/learning/learning-client'
+import { createClient } from '@/lib/supabase/server'
+import type { LearningResource, Idea } from '@/types'
 
-export default function LearningPage() {
+export default async function LearningPage() {
+  const supabase = await createClient()
+
+  const [{ data: resources }, { data: ideas }] = await Promise.all([
+    supabase.from('learning_resources').select('*').order('updated_at', { ascending: false }),
+    supabase.from('ideas').select('id, name').eq('status', 'active').order('name'),
+  ])
+
   return (
     <div className="flex flex-col h-full">
-      <Header title="Aprendizado" breadcrumb="B2C OS" />
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-3xl mb-3">🚧</p>
-          <h2 className="text-[15px] font-semibold text-[#FAFAFA] mb-1">Sistema de Aprendizado</h2>
-          <p className="text-[13px] text-[#52525B]">Disponível na Fase 4</p>
-        </div>
-      </div>
+      <Header title="Sistema de Aprendizado" breadcrumb="B2C OS" />
+      <LearningClient
+        initialResources={(resources ?? []) as LearningResource[]}
+        ideas={(ideas ?? []) as Idea[]}
+      />
     </div>
   )
 }

@@ -235,3 +235,42 @@ export const ROADMAP_TIMEFRAME_LABELS: Record<RoadmapTimeframe, string> = {
   medium: 'Médio Prazo',
   long: 'Longo Prazo',
 }
+
+// ============================================================
+// LEARNING
+// ============================================================
+export type LearningResourceType = 'book' | 'article' | 'framework' | 'note' | 'study' | 'insight'
+
+export interface LearningResource {
+  id: string
+  title: string
+  type: LearningResourceType
+  author: string | null
+  description: string | null
+  progress: number
+  key_insights: string[]
+  actionable_notes: string | null
+  applied_to_idea_ids: string[]
+  tags: string[]
+  url: string | null
+  created_at: string
+  updated_at: string
+}
+
+export const LEARNING_TYPE_LABELS: Record<LearningResourceType, string> = {
+  book: 'Livro',
+  article: 'Artigo',
+  framework: 'Framework',
+  note: 'Nota',
+  study: 'Estudo',
+  insight: 'Insight',
+}
+
+export const LEARNING_TYPE_COLORS: Record<LearningResourceType, string> = {
+  book: '#8B5CF6',
+  article: '#3B82F6',
+  framework: '#6366F1',
+  note: '#71717A',
+  study: '#F59E0B',
+  insight: '#EAB308',
+}

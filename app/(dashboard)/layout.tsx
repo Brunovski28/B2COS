@@ -1,4 +1,7 @@
 import { Sidebar } from '@/components/layout/sidebar'
+import { CommandPalette } from '@/components/layout/command-palette'
+import { KeyboardShortcutsProvider } from '@/components/layout/keyboard-shortcuts-provider'
+import { PageTransition } from '@/components/layout/page-transition'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -6,9 +9,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <div className="flex-1 flex flex-col ml-[220px] overflow-hidden">
         <main className="flex-1 overflow-y-auto">
-          {children}
+          <PageTransition>
+            {children}
+          </PageTransition>
         </main>
       </div>
+      <CommandPalette />
+      <KeyboardShortcutsProvider />
     </div>
   )
 }

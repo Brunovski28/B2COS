@@ -24,6 +24,17 @@ interface UIStore {
   editingRoadmapId: string | null
   openRoadmapForm: (itemId?: string) => void
   closeRoadmapForm: () => void
+
+  // Learning
+  isLearningFormOpen: boolean
+  editingLearningId: string | null
+  openLearningForm: (resourceId?: string) => void
+  closeLearningForm: () => void
+
+  // Command Palette
+  isCommandPaletteOpen: boolean
+  openCommandPalette: () => void
+  closeCommandPalette: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -46,4 +57,13 @@ export const useUIStore = create<UIStore>((set) => ({
   editingRoadmapId: null,
   openRoadmapForm: (itemId) => set({ isRoadmapFormOpen: true, editingRoadmapId: itemId ?? null }),
   closeRoadmapForm: () => set({ isRoadmapFormOpen: false, editingRoadmapId: null }),
+
+  isLearningFormOpen: false,
+  editingLearningId: null,
+  openLearningForm: (resourceId) => set({ isLearningFormOpen: true, editingLearningId: resourceId ?? null }),
+  closeLearningForm: () => set({ isLearningFormOpen: false, editingLearningId: null }),
+
+  isCommandPaletteOpen: false,
+  openCommandPalette: () => set({ isCommandPaletteOpen: true }),
+  closeCommandPalette: () => set({ isCommandPaletteOpen: false }),
 }))
