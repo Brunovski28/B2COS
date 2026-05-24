@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { generateIdeasWithSkill } from '@/lib/ai/actions'
 import type { GeneratedIdea } from '@/lib/ai/skill'
 import { GeneratedIdeaCard } from './generated-idea-card'
@@ -63,8 +64,9 @@ export function IdeaGenerator({ open, onOpenChange }: IdeaGeneratorProps) {
     try {
       const result = await generateIdeasWithSkill(input.trim(), count)
       setIdeas(result.ideas)
-    } catch {
-      // toast already handled inside action if needed
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido'
+      toast.error('Falha ao gerar ideias', { description: msg })
     } finally {
       setLoading(false)
     }
