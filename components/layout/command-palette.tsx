@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Lightbulb, GitBranch, AlertCircle,
-  Map, BarChart2, BookOpen, Plus, Target, TrendingUp,
+  Map, BarChart2, BookOpen, Plus, Target, TrendingUp, Sparkles,
 } from 'lucide-react'
 import { useUIStore } from '@/store/ui.store'
 import { createClient } from '@/lib/supabase/client'
@@ -37,7 +37,7 @@ interface ProblemResult {
 
 export function CommandPalette() {
   const router = useRouter()
-  const { isCommandPaletteOpen, closeCommandPalette, openIdeaForm, openCommandPalette } = useUIStore()
+  const { isCommandPaletteOpen, closeCommandPalette, openIdeaForm, openCommandPalette, openIdeaGenerator } = useUIStore()
   const [query, setQuery] = useState('')
   const [ideas, setIdeas] = useState<IdeaResult[]>([])
   const [problems, setProblems] = useState<ProblemResult[]>([])
@@ -160,6 +160,13 @@ export function CommandPalette() {
               <Plus className="w-4 h-4 text-[#6366F1]" />
               Nova Ideia
               <CommandShortcut>Ctrl+N</CommandShortcut>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => runAction(() => openIdeaGenerator())}
+              className="text-[13px] text-[#A1A1AA] data-selected:bg-[#18181B] data-selected:text-[#FAFAFA]"
+            >
+              <Sparkles className="w-4 h-4 text-violet-400" />
+              Gerar ideias com IA
             </CommandItem>
             <CommandItem
               onSelect={() => { closeCommandPalette(); router.push('/problems'); }}

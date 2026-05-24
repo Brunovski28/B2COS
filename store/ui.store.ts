@@ -35,6 +35,11 @@ interface UIStore {
   isCommandPaletteOpen: boolean
   openCommandPalette: () => void
   closeCommandPalette: () => void
+
+  // Idea Generator
+  isIdeaGeneratorOpen: boolean
+  openIdeaGenerator: () => void
+  closeIdeaGenerator: () => void
 }
 
 export const useUIStore = create<UIStore>((set) => ({
@@ -66,4 +71,8 @@ export const useUIStore = create<UIStore>((set) => ({
   isCommandPaletteOpen: false,
   openCommandPalette: () => set({ isCommandPaletteOpen: true }),
   closeCommandPalette: () => set({ isCommandPaletteOpen: false }),
+
+  isIdeaGeneratorOpen: false,
+  openIdeaGenerator: () => set({ isIdeaGeneratorOpen: true }),
+  closeIdeaGenerator: () => set({ isIdeaGeneratorOpen: false }),
 }))

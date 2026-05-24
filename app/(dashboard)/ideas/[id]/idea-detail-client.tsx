@@ -7,8 +7,15 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { calculateIdeaScore, getScoreClassification } from '@/lib/scoring'
+import {
+  calculateIdeaScore,
+  getScoreClassification,
+  calculateCombinedScore,
+  getSkillVerdict,
+} from '@/lib/scoring'
 import { getNextStage, checkGate } from '@/lib/pipeline-rules'
+import { analyzeIdeaWithSkill } from '@/lib/ai/actions'
+import { mapSkillToContainers } from '@/lib/ai/skill'
 import type { Idea, ContainerAnalysis, PipelineEvent, ContainerType } from '@/types'
 import { CONTAINER_CONFIGS, PIPELINE_STAGE_LABELS } from '@/types'
 import { useUIStore } from '@/store/ui.store'
@@ -19,9 +26,11 @@ import { Badge } from '@/components/ui/badge'
 import { ScoreGauge } from '@/components/shared/score-gauge'
 import { StatusBadge } from '@/components/shared/status-badge'
 import { ContainerCard } from '@/components/containers/container-card'
+import { BehavioralAlertBanner } from '@/components/ideas/behavioral-alert'
 import { IdeaForm } from '@/components/ideas/idea-form'
+import type { BehavioralAlert } from '@/lib/ai/skill'
 import {
-  Edit2, Archive, ArrowRight, ChevronRight,
+  Edit2, Archive, ArrowRight, ChevronRight, Sparkles, Loader2,
 } from 'lucide-react'
 
 interface IdeaDetailClientProps {
@@ -49,12 +58,31 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
   const [idea, setIdea] = useState<Idea>(initialIdea)
   const [containers, setContainers] = useState<ContainerAnalysis[]>(initialContainers)
   const [events] = useState<PipelineEvent[]>(initialEvents)
+  const [analyzingAll, setAnalyzingAll] = useState(false)
+  const [analyzingContainers, setAnalyzingContainers] = useState<Set<string>>(new Set())
+  const [aiScore, setAiScore] = useState<number | null>(null)
+  const [behavioralAlert, setBehavioralAlert] = useState<BehavioralAlert | null>(null)
   const { openIdeaForm } = useUIStore()
   const router = useRouter()
 
   const containerMap = Object.fromEntries(containers.map((c) => [c.container_type, c]))
-  const scoreClass = getScoreClassification(idea.score)
+  const manualScore = calculateIdeaScore(idea)
+  const combinedScore = calculateCombinedScore(manualScore, aiScore)
+  const scoreClass = getScoreClassification(combinedScore)
   const nextStage = getNextStage(idea.pipeline_stage)
+
+  const ideaData = {
+    name: idea.name,
+    description: idea.description,
+    main_pain: idea.main_pain,
+    pain_frequency: idea.pain_frequency,
+    target_segment: idea.target_segment,
+    market_size: idea.market_size,
+    monetization_notes: idea.monetization_notes,
+    recurrence: idea.recurrence,
+    complexity: idea.complexity,
+    competition_level: idea.competition_level,
+  }
 
   const refresh = useCallback(async () => {
     const supabase = createClient()
@@ -91,7 +119,55 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
     setIdea((prev) => ({ ...prev, pipeline_stage: nextStage, score }))
   }
 
-  // Score breakdown (manual because we need per-criterion values)
+  async function handleAnalyzeAll() {
+    setAnalyzingAll(true)
+    const allTypes = CONTAINER_CONFIGS.map(c => c.type)
+    setAnalyzingContainers(new Set(allTypes))
+
+    try {
+      const result = await analyzeIdeaWithSkill(ideaData)
+      const containerMapAI = mapSkillToContainers(result)
+      const supabase = createClient()
+
+      await Promise.all(
+        Object.entries(containerMapAI).map(([type, data]) =>
+          supabase.from('container_analyses').upsert({
+            idea_id: idea.id,
+            container_type: type,
+            score: data.score,
+            approved: data.approved,
+            answers: data.answers,
+          }, { onConflict: 'idea_id,container_type' })
+        )
+      )
+
+      const newAiScore = result.total_score
+      setAiScore(newAiScore)
+
+      const combined = calculateCombinedScore(manualScore, newAiScore)
+      await supabase.from('ideas').update({ score: combined }).eq('id', idea.id)
+      setIdea(prev => ({ ...prev, score: combined }))
+
+      if (result.behavioral_alert.detected) {
+        setBehavioralAlert(result.behavioral_alert)
+        toast.warning('Concorrência Comportamental detectada', {
+          description: result.behavioral_alert.signals.join(', '),
+        })
+      } else {
+        setBehavioralAlert(null)
+      }
+
+      toast.success(`Análise completa — Score IA: ${newAiScore}/100`)
+      await refresh()
+    } catch {
+      toast.error('Análise com IA falhou. Tente novamente ou preencha manualmente.')
+    } finally {
+      setAnalyzingAll(false)
+      setAnalyzingContainers(new Set())
+    }
+  }
+
+  // Score breakdown (manual)
   const breakdown = [
     { label: 'Retenção potencial', value: ((idea.retention_potential ?? 0) / 10) * 25, max: 25, color: '#10B981' },
     { label: 'Frequência da dor', value: { daily: 20, weekly: 15, monthly: 8, rarely: 2 }[idea.pain_frequency ?? 'rarely'] ?? 0, max: 20, color: '#6366F1' },
@@ -101,6 +177,13 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
     { label: 'Complexidade (inverso)', value: ((10 - (idea.complexity ?? 5)) / 10) * 5, max: 5, color: '#8B5CF6' },
     { label: 'Risco (inverso)', value: ((10 - (idea.risk ?? 5)) / 10) * 5, max: 5, color: '#EC4899' },
   ]
+
+  // Get behavioral alert from existing containers if present
+  const existingBehaviorContainer = containerMap['behavior']
+  const storedBehavioralAlert = (existingBehaviorContainer?.answers as Record<string, unknown> | undefined)?.behavioral_alert as BehavioralAlert | undefined
+  const activeBehavioralAlert = behavioralAlert ?? (storedBehavioralAlert?.detected ? storedBehavioralAlert : null)
+
+  const aiVerdict = aiScore !== null ? getSkillVerdict(aiScore) : null
 
   return (
     <div className="flex flex-col h-full">
@@ -150,8 +233,8 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
           >
             {/* Meta row */}
             <div className="flex items-center gap-3 mb-6">
-              <ScoreGauge score={idea.score} size={56} strokeWidth={4} />
-              <div>
+              <ScoreGauge score={combinedScore} size={56} strokeWidth={4} />
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <StatusBadge stage={idea.pipeline_stage} />
                   <span
@@ -161,8 +244,31 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
                     {scoreClass.emoji} {scoreClass.label}
                   </span>
                 </div>
+                {/* Dual scores */}
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-[11px] text-[#3B82F6]">
+                    Manual: {manualScore.toFixed(0)}/100
+                  </span>
+                  {aiScore !== null && (
+                    <>
+                      <span className="text-[#3F3F46]">|</span>
+                      <span className="text-[11px] text-violet-400">
+                        IA: {aiScore}/100
+                      </span>
+                      {aiVerdict && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[9px] px-1.5 py-0 h-4"
+                          style={{ backgroundColor: aiVerdict.color + '20', color: aiVerdict.color, borderColor: aiVerdict.color + '40' }}
+                        >
+                          {aiVerdict.label}
+                        </Badge>
+                      )}
+                    </>
+                  )}
+                </div>
                 {idea.target_segment && (
-                  <p className="text-[12px] text-[#52525B]">{idea.target_segment}</p>
+                  <p className="text-[12px] text-[#52525B] mt-0.5">{idea.target_segment}</p>
                 )}
                 {idea.tags.length > 0 && (
                   <div className="flex gap-1.5 flex-wrap mt-1.5">
@@ -192,7 +298,6 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
 
               {/* Overview Tab */}
               <TabsContent value="overview" className="space-y-5">
-                {/* Problema */}
                 <Section title="O Problema">
                   <DataGrid>
                     <DataItem label="Dor principal" value={idea.main_pain} />
@@ -204,7 +309,6 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
                   </DataGrid>
                 </Section>
 
-                {/* Avaliação */}
                 <Section title="Avaliação">
                   <DataGrid>
                     <DataItem label="Retenção potencial" value={idea.retention_potential != null ? `${idea.retention_potential}/10` : null} />
@@ -215,7 +319,6 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
                   </DataGrid>
                 </Section>
 
-                {/* Notas */}
                 {(idea.monetization_notes || idea.observations || idea.insights) && (
                   <Section title="Notas">
                     {idea.monetization_notes && <NoteBlock label="Monetização" text={idea.monetization_notes} />}
@@ -227,13 +330,37 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
 
               {/* Containers Tab */}
               <TabsContent value="containers">
+                {/* Behavioral alert */}
+                {activeBehavioralAlert && <BehavioralAlertBanner alert={activeBehavioralAlert} />}
+
+                {/* Analyze all button */}
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[12px] text-[#52525B]">
+                    {containers.filter(c => c.approved !== null).length}/8 containers analisados
+                  </p>
+                  <Button
+                    onClick={handleAnalyzeAll}
+                    disabled={analyzingAll}
+                    className="bg-violet-600 hover:bg-violet-700 text-white text-[12px] gap-1.5 h-8"
+                  >
+                    {analyzingAll ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5" />
+                    )}
+                    {analyzingAll ? 'Analisando...' : '⚡ Analisar todos com IA'}
+                  </Button>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   {CONTAINER_CONFIGS.map((config) => (
                     <ContainerCard
                       key={config.type}
                       ideaId={idea.id}
+                      ideaData={ideaData}
                       config={config}
                       analysis={containerMap[config.type] ?? null}
+                      aiLoading={analyzingContainers.has(config.type)}
                       onSaved={refresh}
                     />
                   ))}
@@ -285,11 +412,23 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
                   <ScoreBreakdownRow key={b.label} {...b} />
                 ))}
               </div>
-              <div className="mt-4 pt-3 border-t border-[#27272A] flex justify-between">
-                <span className="text-[12px] text-[#A1A1AA]">Total</span>
-                <span className="text-[14px] font-semibold" style={{ color: scoreClass.color }}>
-                  {idea.score.toFixed(1)} / 100
-                </span>
+              <div className="mt-4 pt-3 border-t border-[#27272A] space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-[11px] text-[#3B82F6]">Score Manual</span>
+                  <span className="text-[12px] font-semibold text-[#3B82F6]">{manualScore.toFixed(1)}</span>
+                </div>
+                {aiScore !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-[11px] text-violet-400">Score IA</span>
+                    <span className="text-[12px] font-semibold text-violet-400">{aiScore}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1 border-t border-[#27272A]">
+                  <span className="text-[12px] text-[#A1A1AA]">Score Combinado</span>
+                  <span className="text-[14px] font-semibold" style={{ color: scoreClass.color }}>
+                    {combinedScore.toFixed(0)} / 100
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -298,12 +437,14 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
               <p className="text-[11px] font-semibold text-[#52525B] uppercase tracking-wider mb-4">Containers</p>
               <div className="space-y-2">
                 {CONTAINER_CONFIGS.map((config) => {
-                  const analysis = containerMap[config.type]
+                  const analysis = containerMap[config.type as ContainerType]
                   const status = !analysis ? 'pending' : analysis.approved ? 'approved' : 'rejected'
+                  const isAI = !!(analysis?.answers as Record<string, unknown> | undefined)?.ai_analyzed
                   return (
                     <div key={config.type} className="flex items-center gap-2.5">
                       <span className="text-base w-6 shrink-0">{config.icon}</span>
                       <span className="text-[12px] text-[#A1A1AA] flex-1">{config.label}</span>
+                      {isAI && <Sparkles className="w-3 h-3 text-violet-400" />}
                       <span className="text-[11px]" style={{ color: status === 'approved' ? '#22C55E' : status === 'rejected' ? '#EF4444' : '#52525B' }}>
                         {status === 'approved' ? '✅' : status === 'rejected' ? '❌' : '⏳'}
                       </span>

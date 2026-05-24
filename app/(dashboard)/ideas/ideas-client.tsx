@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus } from 'lucide-react'
+import { Plus, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { Idea } from '@/types'
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { IdeaCard } from '@/components/ideas/idea-card'
 import { IdeaFilters } from '@/components/ideas/idea-filters'
 import { IdeaForm } from '@/components/ideas/idea-form'
+import { IdeaGenerator } from '@/components/ideas/idea-generator'
 import { EmptyState } from '@/components/shared/empty-state'
 
 interface IdeasClientProps {
@@ -21,7 +22,7 @@ interface IdeasClientProps {
 
 export function IdeasClient({ initialIdeas }: IdeasClientProps) {
   const [ideas, setIdeas] = useState<Idea[]>(initialIdeas)
-  const { openIdeaForm } = useUIStore()
+  const { openIdeaForm, isIdeaGeneratorOpen, openIdeaGenerator, closeIdeaGenerator } = useUIStore()
   const { filters } = useIdeasStore()
 
   const refresh = useCallback(async () => {
@@ -88,15 +89,26 @@ export function IdeasClient({ initialIdeas }: IdeasClientProps) {
         title="Banco de Ideias"
         breadcrumb={`${activeCount} idea${activeCount !== 1 ? 's' : ''} ativa${activeCount !== 1 ? 's' : ''}`}
         actions={
-          <Button
-            onClick={() => openIdeaForm()}
-            size="sm"
-            className="h-8 bg-[#6366F1] hover:bg-[#4F46E5] text-white text-[12px] gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Nova Ideia
-            <kbd className="ml-1 px-1 py-0.5 rounded text-[10px] bg-white/10">N</kbd>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => openIdeaGenerator()}
+              size="sm"
+              variant="outline"
+              className="h-8 border-violet-700 text-violet-400 hover:bg-violet-900/20 text-[12px] gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              ✨ Gerar com IA
+            </Button>
+            <Button
+              onClick={() => openIdeaForm()}
+              size="sm"
+              className="h-8 bg-[#6366F1] hover:bg-[#4F46E5] text-white text-[12px] gap-1.5"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Nova Ideia
+              <kbd className="ml-1 px-1 py-0.5 rounded text-[10px] bg-white/10">N</kbd>
+            </Button>
+          </div>
         }
       />
 
@@ -145,6 +157,10 @@ export function IdeasClient({ initialIdeas }: IdeasClientProps) {
       </div>
 
       <IdeaForm onSuccess={refresh} />
+      <IdeaGenerator
+        open={isIdeaGeneratorOpen}
+        onOpenChange={(open) => !open && closeIdeaGenerator()}
+      />
     </div>
   )
 }

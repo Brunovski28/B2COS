@@ -1,4 +1,5 @@
 import type { Idea, ScoreClassification } from '@/types'
+import type { SkillAnalysisResult } from '@/lib/ai/skill'
 
 export function calculateIdeaScore(idea: Partial<Idea>): number {
   let score = 0
@@ -70,4 +71,25 @@ export function getScoreClassification(score: number): ScoreClassification {
 
 export function getScoreColor(score: number): string {
   return getScoreClassification(score).color
+}
+
+export function calculateCombinedScore(
+  manualScore: number | null,
+  aiScore: number | null
+): number {
+  if (manualScore !== null && aiScore !== null) {
+    return Math.round(manualScore * 0.4 + aiScore * 0.6)
+  }
+  return manualScore ?? aiScore ?? 0
+}
+
+export function getSkillScoreFromAnalysis(result: SkillAnalysisResult): number {
+  return result.total_score
+}
+
+export function getSkillVerdict(score: number): { label: string; color: string; description: string } {
+  if (score >= 80) return { label: 'Aprovada', color: '#22C55E', description: 'Alta viabilidade, vale aprofundar' }
+  if (score >= 60) return { label: 'Condicional', color: '#F59E0B', description: 'Validar hipóteses específicas antes de construir' }
+  if (score >= 40) return { label: 'Risco Alto', color: '#F97316', description: 'Reavaliar modelo, nicho ou público-alvo' }
+  return { label: 'Reprovada', color: '#EF4444', description: 'Ideia não sustenta viabilidade de mercado atual' }
 }

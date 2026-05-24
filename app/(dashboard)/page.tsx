@@ -8,6 +8,7 @@ import { AlertsList } from '@/components/dashboard/alerts-list'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
 import { RecommendationsList } from '@/components/dashboard/recommendations-list'
 import { DashboardRefresh } from '@/components/dashboard/dashboard-refresh'
+import { AIAnalysesWidget } from '@/components/dashboard/ai-analyses-widget'
 import { generateAlerts } from '@/lib/alerts'
 import { generateRecommendations } from '@/lib/recommendations'
 import { checkGate } from '@/lib/pipeline-rules'
@@ -121,6 +122,9 @@ export default async function DashboardPage() {
 
         {/* Widget 6: Recent activity — full width */}
         <ActivityFeed events={recentEvents} ideas={activeIdeas} />
+
+        {/* Widget 8: AI analyses recent */}
+        <AIAnalysesWidget />
 
       </div>
     </div>
