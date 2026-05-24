@@ -66,7 +66,7 @@ export function IdeaDetailClient({ idea: initialIdea, containers: initialContain
   const router = useRouter()
 
   const containerMap = Object.fromEntries(containers.map((c) => [c.container_type, c]))
-  const manualScore = calculateIdeaScore(idea)
+  const manualScore = idea.score
   const combinedScore = calculateCombinedScore(manualScore, aiScore)
   const scoreClass = getScoreClassification(combinedScore)
   const nextStage = getNextStage(idea.pipeline_stage)
